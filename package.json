@@ -1,0 +1,16 @@
+{
+  "name": "extraction",
+  "version": "1.0.0",
+  "description": "disaster seminar project",
+  "main": "extraction.js",
+  "scripts": {
+    "test": "nodeunit"
+  },
+  "author": "Thomas R Storey",
+  "license": "ISC",
+  "dependencies": {
+    "lodash": "^3.10.1",
+    "node-png": "^0.4.3",
+    "png-js": "^0.1.1"
+  }
+}
