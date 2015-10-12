@@ -49,12 +49,29 @@ module.exports = (function () {
   self.extractVerticalSeams = function ( numseams, inpath,
   outpath, seamsout, cb ){
     getSourceImage(inpath, function(imgdata){
+      var seamimg = new png({filterType: 4});
+      var currentimg = new png({filterType: 4});
+      var currentmap;
+      seamimg.height = currentimg.height = imgdata.height;
+      seamimg.width = currentimg.width = imgdata.width;
+      currentimg.data = [];
+      seamimg.data = [];
+      for (var i = 0; i != imgdata.data.length; i++){
+        currentimg.data.push(imgdata.data[i]);
+        seamimg.data.push(255);
+      }
       for(var i = 0; i != numseams; i++){
         // get seam for current image
+        currentmap = getEnergyMap(currentimg);
+        var seam = self.findVerticalSeam(currentmap, imgdata);
         // get new image without seam, write seam into seam image
-        // update energy map
+        console.log(currentimg.width, seamimg.width);
+        extractSeam(currentimg, seam, seamimg, 'v');
+        console.log(currentimg.width, seamimg.width);
       }
-      return cb(newimg);
+      currentimg.pack().pipe(fs.createWriteStream(outpath || 'out.png'));
+      seamimg.pack().pipe(fs.createWriteStream(seamsout || 'seamsout.png'));
+      return cb();
     });
   };
 
@@ -100,6 +117,26 @@ module.exports = (function () {
 
   self.findHorizontalSeam = function ( map ) {
 
+  };
+
+  var extractSeam = function ( img, seam, simg, flag ) {
+    seam.forEach(function( x, y ) {
+      var i = indexFromCoords(x, y, img.width, img.height);
+      var pixel = img.data.splice(i, 4);
+      console.log(i >> 2, x, y, pixel);
+      if(pixel.length !== 4){
+        console.log('weird!');
+      } else {
+        simg.data[i] = pixel[0];
+        simg.data[i+1] = pixel[1];
+        simg.data[i+2] = pixel[2];
+        simg.data[i+3] = pixel[3];
+      }
+
+      // console.log(simg.data.length);
+    });
+    if(flag === 'v') img.width -= 1;
+    else if(flag === 'h') img.height -=1;
   };
 
   var constructVerticalSeam = function ( solution, img ) {
