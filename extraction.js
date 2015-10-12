@@ -63,23 +63,12 @@ module.exports = (function () {
         currentimg.data.push(imgdata.data[i]);
         seamimg.data.push(255);
       }
-      // console.log("CURRENTIMG DAT  A LENGTH: " + currentimg.data.length);
       for(var i = 0; i != numseams; i++){
-        // console.log("LOOP START");
-
         // get seam for current image
         currentmap = getEnergyMap(currentimg);
-        // console.log("CURRENTIMG DATA LENGTH: " + currentimg.data.length);
-
         var seam = self.findVerticalSeam(currentmap, currentimg);
-        // console.log("CURRENTIMG DATA LENGTH: " + currentimg.data.length);
-
         // get new image without seam, write seam into seam image
-        // console.log(currentimg.width, seamimg.width);
         extractSeam(currentimg, seam, seamimg, 'v');
-        // console.log("CURRENTIMG DATA LENGTH: " + currentimg.data.length);
-        // // console.log(currentimg.width, seamimg.width);
-        // console.log("LOOP END");
       }
       currentimg.pack().pipe(fs.createWriteStream(outpath || 'out.png'));
       seamimg.pack().pipe(fs.createWriteStream(seamsout || 'seamsout.png'));
@@ -113,20 +102,19 @@ module.exports = (function () {
         } else {
           var best = {sum: -1, dir : null};
           for(var d = -1; d != 2; d++){
-            // if((x > 0 && d !== -1) || (x < w-1 && d !== 1)){
+            if((x > 0 && d !== -1) || (x < w-1 && d !== 1)){
               var current = map[indexFromCoords(x, y, w, h) >> 2] +
                         map[indexFromCoords(x+d, y-1, w, h) >> 2];
               if(current < best.sum || best.sum < 0){
                 best.sum = current;
                 best.dir = d;
               }
-            // }
+            }
           }
           solution.push(best);
         }
       }
     }
-    // console.log(solution);
     return constructVerticalSeam(solution, img);
   };
 
@@ -142,7 +130,6 @@ module.exports = (function () {
       var si = indexFromCoords(x, y, simg.width, simg.height);
       var pixel = [img.data[i], img.data[i+1], img.data[i+2], img.data[i+3]];
       toRemove.push(i, i+1, i+2, i+3);
-      // console.log(i >> 2, x, y, pixel);
       if(pixel.length !== 4){
         console.log("INDEX: " + i, "COORD: " + x, y);
         console.log("WIDTH: "+img.width, "HEIGHT: "+img.height, "CURRENTIMG DATA LENGTH: " + img.data.length);
@@ -152,16 +139,14 @@ module.exports = (function () {
         simg.data[si+2] = pixel[2];
         simg.data[si+3] = pixel[3];
       }
-      // console.log(simg.data.length);
     });
-    // toRemove.forEach(function(i){
-    //   img.data.splice(i, 4);
-    // });
-    _.remove(img.data, function(v, i){
-      return _.includes(toRemove, i);
+    toRemove.forEach(function(i){
+      img.data[i] = null;
     });
+    img.data = _.compact(img.data);
     if(flag === 'v') img.width -= 1;
     else if(flag === 'h') img.height -=1;
+    // return cleanedArray;
   };
 
   var constructVerticalSeam = function ( solution, img ) {
@@ -183,7 +168,6 @@ module.exports = (function () {
       best = best + solution[indexFromCoords(best, y+1, w, h) >> 2].dir;
       seam.unshift(best);
     }
-    // console.log("SEAM START ==========", seam, "SEAM END===========");
     return seam;
   };
 
