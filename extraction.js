@@ -67,8 +67,10 @@ module.exports = (function () {
         // get seam for current image
         currentmap = getEnergyMap(currentimg);
         var seam = self.findVerticalSeam(currentmap, currentimg);
+        // console.log(seam);
         // get new image without seam, write seam into seam image
         extractSeam(currentimg, seam, seamimg, 'v');
+        console.log(Math.ceil((i/numseams)*100)+'%');
       }
       currentimg.pack().pipe(fs.createWriteStream(outpath || 'out.png'));
       seamimg.pack().pipe(fs.createWriteStream(seamsout || 'seamsout.png'));
@@ -94,18 +96,18 @@ module.exports = (function () {
     var h = img.height;
     for(var y = 0; y != h; y++){
       for(var x = 0; x != w; x++){
+        var best = {sum : -1, dir : null};
         if(y === 0) {
           solution.push({
             sum : map[indexFromCoords(x, y, w, h) >> 2],
             dir : 0
           });
         } else {
-          var best = {sum: -1, dir : null};
           for(var d = -1; d != 2; d++){
-            if((x > 0 && d !== -1) || (x < w-1 && d !== 1)){
+            if(!(x === 0 && d === -1) && !(x === w-1 && d === 1)){
               var current = map[indexFromCoords(x, y, w, h) >> 2] +
                         map[indexFromCoords(x+d, y-1, w, h) >> 2];
-              if(current < best.sum || best.sum < 0){
+              if(current <= best.sum || best.sum < 0){
                 best.sum = current;
                 best.dir = d;
               }
@@ -115,6 +117,7 @@ module.exports = (function () {
         }
       }
     }
+
     return constructVerticalSeam(solution, img);
   };
 
@@ -143,7 +146,7 @@ module.exports = (function () {
     toRemove.forEach(function(i){
       img.data[i] = null;
     });
-    img.data = _.compact(img.data);
+    img.data = _.filter(img.data, function(n){return n !== null});
     if(flag === 'v') img.width -= 1;
     else if(flag === 'h') img.height -=1;
     // return cleanedArray;
@@ -156,12 +159,12 @@ module.exports = (function () {
     var best = -1;
     for(var x = 0; x != w; x++){
       if(best < 0
-      || solution[indexFromCoords(x, h-1, w, h) >> 2].sum <
+      || solution[indexFromCoords(x, h-1, w, h) >> 2].sum <=
       solution[indexFromCoords(best, h-1, w, h) >> 2].sum){
         best = x;
       }
     }
-    console.log(best);
+    // console.log(best);
     seam.unshift(best);
     for(var y = h - 2; y >= 0; y--){
 
