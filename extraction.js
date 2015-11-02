@@ -9,7 +9,7 @@ module.exports = (function () {
   var fs  = require('fs');
 
   var self = {};
-
+  var pxNum = 1;
   self.renderEnergyMap = function ( inpath, outpath, cb ) {
 
     getSourceImage(inpath, function(imgdata){
@@ -63,18 +63,28 @@ module.exports = (function () {
         currentimg.data.push(imgdata.data[i]);
         seamimg.data.push(255);
       }
-      for(var i = 0; i != numseams; i++){
-        // get seam for current image
-        currentmap = getEnergyMap(currentimg);
-        var seam = self.findVerticalSeam(currentmap, currentimg);
-        // console.log(seam);
-        // get new image without seam, write seam into seam image
-        extractSeam(currentimg, seam, seamimg, 'v');
-        console.log(Math.ceil((i/numseams)*100)+'%');
-      }
-      currentimg.pack().pipe(fs.createWriteStream(outpath || 'out.png'));
-      seamimg.pack().pipe(fs.createWriteStream(seamsout || 'seamsout.png'));
-      return cb();
+
+      function processSeams (numseams, cb) {
+        if(numseams > 0){
+          // get seam for current image
+          currentmap = getEnergyMap(currentimg);
+          var seam = self.findVerticalSeam(currentmap, currentimg);
+          // get new image without seam, write seam into seam image
+          extractSeam(currentimg, seam, seamimg, 'v', function(){
+            currentimg.pack().pipe(fs.createWriteStream(outpath || 'out.png'));
+            seamimg.pack().pipe(fs.createWriteStream(seamsout || 'seamsout.png'));
+            processSeams(numseams-1, cb);
+          });
+        } else {
+          return cb();
+        }
+      };
+      // for(var i = 0; i != numseams; i++){
+      //
+      //   console.log(Math.ceil((i/numseams)*100)+'%');
+      // }
+      processSeams(numseams, cb);
+      // return cb();
     });
   };
 
@@ -125,31 +135,62 @@ module.exports = (function () {
 
   };
 
-  var extractSeam = function ( img, seam, simg, flag ) {
+  var extractSeam = function ( img, seam, simg, flag, cb ) {
+    // var localimg = _.clone(img);
     var w = img.width, h = img.height;
     var toRemove = [];
-    seam.forEach(function( x, y ) {
-      var i = indexFromCoords(x, y, w, h);
-      var si = indexFromCoords(x, y, simg.width, simg.height);
-      var pixel = [img.data[i], img.data[i+1], img.data[i+2], img.data[i+3]];
-      toRemove.push(i, i+1, i+2, i+3);
-      if(pixel.length !== 4){
-        console.log("INDEX: " + i, "COORD: " + x, y);
-        console.log("WIDTH: "+img.width, "HEIGHT: "+img.height, "CURRENTIMG DATA LENGTH: " + img.data.length);
-      } else {
+
+    function consumeSeam (seam,cb,tmpimg){
+      if(seam.length > 0){
+        var x = seam[0],
+           y = img.height - seam.length,
+           i = indexFromCoords(x, y, w, h),
+           sx = Math.floor((x/w)*simg.width),
+           si = indexFromCoords(sx, y, simg.width, simg.height),
+           pixel = [img.data[i], img.data[i+1], img.data[i+2], img.data[i+3]];
+        toRemove.push(i, i+1, i+2, i+3);
         simg.data[si] = pixel[0];
         simg.data[si+1] = pixel[1];
         simg.data[si+2] = pixel[2];
         simg.data[si+3] = pixel[3];
+        if(tmpimg === null) {
+          tmpimg = new png({filterType: 4});
+          tmpimg.width = img.width;
+          tmpimg.height = img.height;
+          tmpimg.data = _.clone(img.data);
+        }
+        tmpimg.data[i] = 255;
+        tmpimg.data[i+1] = 255;
+        tmpimg.data[i+2] = 255;
+        tmpimg.data[i+3] = 0;
+        var filenum = pxNum.toString();
+        while(filenum.length < 6){
+          filenum = '0'+filenum;
+        }
+        var wstream = fs.createWriteStream('frames/frame'+filenum+'.png');
+        pxNum++;
+        tmpimg.pack().pipe(wstream);
+        wstream.on('finish', function(){
+          var sstream = fs.createWriteStream('frames/seamsframe'+filenum+'.png');
+          simg.pack().pipe(sstream);
+          sstream.on('finish', function(){
+            consumeSeam(seam.slice(1), cb, tmpimg);
+          });
+        });
+      } else {
+        return cb();
       }
-    });
-    toRemove.forEach(function(i){
-      img.data[i] = null;
-    });
-    img.data = _.filter(img.data, function(n){return n !== null});
-    if(flag === 'v') img.width -= 1;
-    else if(flag === 'h') img.height -=1;
-    // return cleanedArray;
+    };
+    consumeSeam(seam, function(){
+      toRemove.forEach(function(i){
+        img.data[i] = null;
+      });
+      img.data = _.filter(img.data, function(n){return n !== null});
+      if(flag === 'v') img.width -= 1;
+      else if(flag === 'h') img.height -=1;
+      return cb();
+    }, null);
+
   };
 
   var constructVerticalSeam = function ( solution, img ) {
