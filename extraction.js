@@ -49,8 +49,9 @@ module.exports = (function () {
     resultimg.pack().pipe(fs.createWriteStream(outpath || 'outseam.png'));
   }
 
-  self.extractVerticalSeams = function ( numseams, inpath,
-  outpath, seamsout, cb ){
+  self.extractVerticalSeams = function ( numseams, startframe, inpath,
+  outpath, seamsout, framesout, cb ){
+    pxNum = startframe;
     getSourceImage(inpath, function(imgdata){
       var seamimg = new png({filterType: 4});
       var currentimg = new png({filterType: 4});
@@ -59,9 +60,20 @@ module.exports = (function () {
       seamimg.width = currentimg.width = imgdata.width;
       currentimg.data = [];
       seamimg.data = [];
-      for (var i = 0; i != imgdata.data.length; i++){
+      for (var i = 0; i != imgdata.data.length; i+=4){
         currentimg.data.push(imgdata.data[i]);
-        seamimg.data.push(255);
+        currentimg.data.push(imgdata.data[i+1]);
+        currentimg.data.push(imgdata.data[i+2]);
+        currentimg.data.push(imgdata.data[i+3]);
+        seamimg.data.push(0);
+        seamimg.data.push(0);
+        seamimg.data.push(0);
+        seamimg.data.push(0);
+        // if(i%3===0) {
+        //   seamimg.data.push(0);
+        // } else {
+        //   seamimg.data.push(255);
+        // }
       }
 
       function processSeams (numseams, cb) {
@@ -70,7 +82,7 @@ module.exports = (function () {
           currentmap = getEnergyMap(currentimg);
           var seam = self.findVerticalSeam(currentmap, currentimg);
           // get new image without seam, write seam into seam image
-          extractSeam(currentimg, seam, seamimg, 'v', function(){
+          extractSeam(currentimg, seam, seamimg, framesout, 'v', function(){
             currentimg.pack().pipe(fs.createWriteStream(outpath || 'out.png'));
             seamimg.pack().pipe(fs.createWriteStream(seamsout || 'seamsout.png'));
             processSeams(numseams-1, cb);
@@ -135,7 +147,7 @@ module.exports = (function () {
 
   };
 
-  var extractSeam = function ( img, seam, simg, flag, cb ) {
+  var extractSeam = function ( img, seam, simg, framesout, flag, cb ) {
     // var localimg = _.clone(img);
     var w = img.width, h = img.height;
     var toRemove = [];
@@ -167,11 +179,11 @@ module.exports = (function () {
         while(filenum.length < 6){
           filenum = '0'+filenum;
         }
-        var wstream = fs.createWriteStream('frames/frame'+filenum+'.png');
+        var wstream = fs.createWriteStream(framesout+'/frame'+filenum+'.png');
         pxNum++;
         tmpimg.pack().pipe(wstream);
         wstream.on('finish', function(){
-          var sstream = fs.createWriteStream('frames/seamsframe'+filenum+'.png');
+          var sstream = fs.createWriteStream(framesout+'/seamsframe'+filenum+'.png');
           simg.pack().pipe(sstream);
           sstream.on('finish', function(){
             consumeSeam(seam.slice(1), cb, tmpimg);
