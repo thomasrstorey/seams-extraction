@@ -6,7 +6,7 @@ thomas storey
 disaster seminar
 */
 
-var extraction = require('./extraction.js');
+var extraction = require('./extraction.js')(null, false);
 
 // extraction.getRawEnergyMap(process.argv[2], function(map, img){
 //   var seam = extraction.findVerticalSeam(map, img);

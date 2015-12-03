@@ -3,7 +3,7 @@ extraction.js
 thomas storey
 disaster seminar
 */
-module.exports = (function () {
+module.exports = function (renderOut, realtime) {
   var png = require('node-png').PNG;
   var _   = require('lodash');
   var fs  = require('fs');
@@ -83,8 +83,13 @@ module.exports = (function () {
           var seam = self.findVerticalSeam(currentmap, currentimg);
           // get new image without seam, write seam into seam image
           extractSeam(currentimg, seam, seamimg, framesout, 'v', function(){
-            currentimg.pack().pipe(fs.createWriteStream(outpath || 'out.png'));
-            seamimg.pack().pipe(fs.createWriteStream(seamsout || 'seamsout.png'));
+            if(!realtime){
+              currentimg.pack()
+              .pipe(fs.createWriteStream(outpath || 'out.png'));
+
+              seamimg.pack()
+              .pipe(fs.createWriteStream(seamsout ||'seamsout.png'));
+            }
             processSeams(numseams-1, cb);
           });
         } else {
@@ -159,7 +164,7 @@ module.exports = (function () {
            i = indexFromCoords(x, y, w, h),
            sx = Math.floor((x/w)*simg.width),
            si = indexFromCoords(sx, y, simg.width, simg.height),
-           pixel = [img.data[i], img.data[i+1], img.data[i+2], img.data[i+3]];
+           pixel = [img.data[i],img.data[i+1],img.data[i+2],img.data[i+3]];
         toRemove.push(i, i+1, i+2, i+3);
         simg.data[si] = pixel[0];
         simg.data[si+1] = pixel[1];
@@ -179,27 +184,37 @@ module.exports = (function () {
         while(filenum.length < 6){
           filenum = '0'+filenum;
         }
-        var wstream = fs.createWriteStream(framesout+'/frame'+filenum+'.png');
-        pxNum++;
-        tmpimg.pack().pipe(wstream);
-        wstream.on('finish', function(){
-          var sstream = fs.createWriteStream(framesout+'/seamsframe'+filenum+'.png');
-          simg.pack().pipe(sstream);
-          sstream.on('finish', function(){
-            consumeSeam(seam.slice(1), cb, tmpimg);
+        if(realtime){
+          renderOut(simg.data, tmpimg.data);
+          consumeSeam(seam.slice(1), cb, tmpimg);
+        } else {
+          var wstream =fs.createWriteStream(framesout+'/frame'+filenum+'.png');
+          pxNum++;
+          tmpimg.pack().pipe(wstream);
+          wstream.on('finish', function(){
+            var sstream =
+            fs.createWriteStream(framesout+'/seamsframe'+filenum+'.png');
+            simg.pack().pipe(sstream);
+            sstream.on('finish', function(){
+              consumeSeam(seam.slice(1), cb, tmpimg);
+            });
           });
-        });
+        }
       } else {
         return cb();
       }
     };
     consumeSeam(seam, function(){
       toRemove.forEach(function(i){
+        var row = coordsFromIndex(i, img.width, img.height)[1];
+        var col = img.width%2===0? 0 : img.width;
+        var splicei = indexFromCoords(row, col, img.width);
+        img.data.splice(splicei, 0, 255, 255, 255, 255);
         img.data[i] = null;
       });
       img.data = _.filter(img.data, function(n){return n !== null});
-      if(flag === 'v') img.width -= 1;
-      else if(flag === 'h') img.height -=1;
+      // if(flag === 'v') img.width -= 1;
+      // else if(flag === 'h') img.height -=1;
       return cb();
     }, null);
 
@@ -309,4 +324,4 @@ module.exports = (function () {
 
   return self;
 
-})();
+};

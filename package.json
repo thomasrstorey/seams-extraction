@@ -9,7 +9,9 @@
   "author": "Thomas R Storey",
   "license": "ISC",
   "dependencies": {
+    "bindings": "^1.2.1",
     "lodash": "^3.10.1",
+    "nan": "^2.1.0",
     "node-png": "^0.4.3",
     "png-js": "^0.1.1"
   }
