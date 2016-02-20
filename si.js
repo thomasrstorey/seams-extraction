@@ -1,38 +1,65 @@
 window.onload = function () {
-  var img = new Image(960, 960),
+  var imgsize = 960;
+  var img = new Image(imgsize, imgsize),
      canvas = document.getElementById('canvas'),
+     tmpcanvas = document.createElement('canvas'),
      orig,
      gray,
      grad,
      carved,
-     seams;
+     seams,
+     done = false;
   var cmat,
      pmat;
 
   var seam = null;
+  var imgs = ['out1.png','out2.png','out3.png','out4.png','out5.png',
+          'out6.png','out7.png','out8.png','out9.png','out10.png','out11.png',
+          'out12.png','out13.png','out14.png','out15.png','out16.png',
+          'out17.png','out18.png','out19.png','out20.png','out21.png',
+          'out22.png','out23.png','out24.png','out25.png','out26.png',
+          'out27.png'];
+
+  function handleResize() {
+    canvas.width = window.innerWidth;
+    canvas.height = canvas.width/2;
+  }
+
+  window.addEventListener('resize', handleResize);
 
   var requestAnimationFrame = window.requestAnimationFrame;
 
-  img.src = 'img/borderhd.png';
-
-  img.addEventListener("load", function onLoad () {
-    canvas.height = img.height;
-    canvas.width = img.width*2;
-
-    var ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0);
-
-    orig = ctx.getImageData(0, 0, img.width, img.height);
-
-    ctx.globalCompositeOperation = 'destination-over';
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-
-    gray = new ImageData(img.width, img.height);
-    grad = new ImageData(img.width, img.height);
-    carved = new ImageData(img.width-1, img.height);
-    seams = new ImageData(img.width, img.height);
+  init('img/out0.png', function(){
     requestAnimationFrame(carve);
   });
+
+  function init (path, cb) {
+    img.src = path;
+
+    img.addEventListener("load", function onLoad () {
+      console.log("LOAD");
+      canvas.width = window.innerWidth;
+      canvas.height = canvas.width/2;
+      tmpcanvas.width = imgsize;
+      tmpcanvas.height = imgsize;
+      var ctx = canvas.getContext('2d');
+      var tmpctx = tmpcanvas.getContext('2d');
+      tmpctx.drawImage(img, 0, 0);
+
+      orig = tmpctx.getImageData(0, 0, img.width, img.height);
+
+      ctx.globalCompositeOperation = 'destination-over';
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+
+      gray = new ImageData(img.width, img.height);
+      grad = new ImageData(img.width, img.height);
+      carved = new ImageData(img.width-1, img.height);
+      seams = new ImageData(img.width, img.height);
+      if(cb){
+        cb();
+      }
+    });
+  }
 
   function carve (ts) {
     // seam is array of pixel coords to remove
@@ -42,29 +69,53 @@ window.onload = function () {
       seam = findVerticalSeam();
     }
     moveNext(seam);
-
+    // consume(seam);
 
     if(!seam.length){
-      updateOriginal();
-      seam = null;
+      if(done){
+        console.log("DONE");
+        done = false;
+        seam = null;
+        saveCanvasToDisk(canvas);
+        init('img/'+imgs.shift());
+        return;
+      } else {
+        updateOriginal();
+        seam = null;
+      }
     }
-
     if(orig.width > 0) {
       requestAnimationFrame(carve);
     }
   }
 
+  function saveCanvasToDisk(cvs){
+    var dataURL = cvs.toDataURL("image/png");
+    var data = window.atob(dataURL.substring("data:image/png;base64,".length));
+    var asArray = new Uint8Array(data.length);
+    for(var i = 0; i < data.length; ++i){
+      asArray[i] = data.charCodeAt(i);
+    }
+    var blob = new Blob([asArray.buffer], {type: "image/png"});
+    saveAs(blob, "carved_"+imgs[0]);
+  }
+
   function renderToCanvas () {
     var ctx = canvas.getContext('2d');
+    var tmpctx = tmpcanvas.getContext('2d');
     ctx.globalCompositeOperation = 'destination-over';
     ctx.clearRect(0,0,canvas.width,canvas.height);
+
     // render orig ImageData to left half of canvas
-    ctx.putImageData(orig, (img.width-orig.width)/2, 0);
+    tmpctx.clearRect(0,0,tmpcanvas.width,tmpcanvas.height);
+    tmpctx.putImageData(orig, (img.width-orig.width)/2, 0);
+    ctx.drawImage(tmpcanvas, 0, 0, canvas.width/2, canvas.height);
+
     // render seams ImageData to right half of canvas
-    ctx.putImageData(seams, img.width, 0);
-    // ctx.putImageData(gray, img.width*2, 0);
-    // ctx.putImageData(grad, img.width*3, 0);
-    // ctx.putImageData(carved, img.width*4, 0);
+    tmpctx.clearRect(0,0,tmpcanvas.width,tmpcanvas.height);
+    tmpctx.putImageData(seams, 0, 0);
+    ctx.drawImage(tmpcanvas, canvas.width/2, 0, canvas.width/2, canvas.height);
+
   }
 
   function convertToGrayscale () {
@@ -93,6 +144,15 @@ window.onload = function () {
   }
 
   function findVerticalSeam () {
+    if(orig.width === 1){
+      var seam = [],
+         y = orig.height - 1;
+      while(y >= 0){
+        seam[y] = 0;
+        y--;
+      }
+      return seam;
+    }
     findGradient();
     initMatrices();
     for(var y = 0; y != orig.height; ++y){
@@ -152,6 +212,8 @@ window.onload = function () {
       carved = new ImageData(orig.width-1, orig.height);
       gray = new ImageData(orig.width, orig.height);
       grad = new ImageData(orig.width, orig.height);
+    } else {
+      done = true;
     }
 
   }
@@ -173,6 +235,12 @@ window.onload = function () {
         // set pixel in original (to display)
         setPixel(orig, x, y, op);
       }
+    }
+  }
+
+  function consume (seam){
+    while(seam.length){
+      moveNext(seam);
     }
   }
 
